@@ -8,11 +8,11 @@ import threading
 import google.generativeai as genai
 
 # COLE SUA CHAVE DE API DIRETAMENTE AQUI ENTRE AS ASPAS:
-CHAVE_API_GEMINI = "SUA_CHAVE_AQUI"
+CHAVE_API_GEMINI = "AQ.Ab8RN6JeiQ5O6OLBcDn8Opcd0xX_s1xQGIF9F45_IrioDnwzgQ"
 
 genai.configure(api_key=CHAVE_API_GEMINI)
 
-# Configuração da personalidade (Manual do Projeto)[cite: 4]
+# Configuração da personalidade (Manual do Projeto)[cite: 2]
 system_instruction = (
     "Você é o C.Y.N.I.C., um assistente pessoal virtual altamente inteligente, "
     "mas profundamente sarcástico, ácido e com um leve complexo de superioridade. "
@@ -154,7 +154,6 @@ def motor_de_audicao(loop, websocket):
                 
             print(f"Capturado: {texto_reconhecido}")
             
-            # Variações fonéticas comuns da palavra-chave
             gatilhos = ["cínico", "cynic", "sinico", "sinique", "sínico", "sim lico", "nicol"]
             
             if any(gatilho in texto_reconhecido for gatilho in gatilhos):
@@ -166,7 +165,6 @@ def motor_de_audicao(loop, websocket):
                 except Exception:
                     pass
                 
-                # Gera a resposta ácida com o Gemini
                 resposta_ia = model_gemini.generate_content(texto_reconhecido)
                 texto_resposta = resposta_ia.text.strip()
                 
