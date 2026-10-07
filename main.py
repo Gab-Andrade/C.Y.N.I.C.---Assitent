@@ -8,7 +8,7 @@ import threading
 import google.generativeai as genai
 
 # COLE SUA CHAVE DE API DIRETAMENTE AQUI ENTRE AS ASPAS:
-CHAVE_API_GEMINI = "AQ.Ab8RN6JeiQ5O6OLBcDn8Opcd0xX_s1xQGIF9F45_IrioDnwzgQ"
+CHAVE_API_GEMINI = "AQ.Ab8RN6IFbWKnNo0sp7LCubIP5SIytKU6S48BlmEACBlql3Drbw"
 
 genai.configure(api_key=CHAVE_API_GEMINI)
 
@@ -23,7 +23,7 @@ system_instruction = (
 
 generation_config = {"temperature": 0.7}
 model_gemini = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
+    model_name="gemini-3.8-flash", # Atualizado conforme o Manual do Projeto
     system_instruction=system_instruction,
     generation_config=generation_config
 )
@@ -83,7 +83,7 @@ html = """
 </head>
 <body>
     <div class="core" id="core-ia"></div>
-    <div class="status-text" id="status">AGUARDANDO PALAVRA-CHAVE: "CÍNICO"</div>
+    <div class="status-text" id="status">ESCUTANDO TUDO O QUE VOCÊ DIZ...</div>
 
     <script>
         var ws = new WebSocket("ws://localhost:8000/ws");
@@ -112,7 +112,7 @@ async def get():
 def motor_de_audicao(loop, websocket):
     try:
         asyncio.run_coroutine_threadsafe(
-            websocket.send_json({"estado": "pronto", "mensagem": "ONLINE. Diga 'Cínico' para chamar minha atenção."}),
+            websocket.send_json({"estado": "pronto", "mensagem": "ONLINE. Estou ouvindo cada palavra sua (infelizmente)."}),
             loop
         )
     except Exception:
@@ -125,7 +125,7 @@ def motor_de_audicao(loop, websocket):
         try:
             try:
                 asyncio.run_coroutine_threadsafe(
-                    websocket.send_json({"estado": "ouvindo", "mensagem": "MONITORANDO... (Diga 'Cínico')"}),
+                    websocket.send_json({"estado": "ouvindo", "mensagem": "MONITORANDO..."}),
                     loop
                 )
             except Exception:
@@ -147,39 +147,43 @@ def motor_de_audicao(loop, websocket):
                 continue
 
             result = model_whisper.transcribe(gravacao_float32, language="pt", fp16=False)
-            texto_reconhecido = result.get("text", "").strip().lower()
+            texto_reconhecido = result.get("text", "").strip()
             
             if not texto_reconhecido or len(texto_reconhecido) <= 2:
                 continue
                 
             print(f"Capturado: {texto_reconhecido}")
             
-            gatilhos = ["cínico", "cynic", "sinico", "sinique", "sínico", "sim lico", "nicol"]
+            # --- GATILHO REMOVIDO: Tudo o que for falado vai para o Gemini ---
             
-            if any(gatilho in texto_reconhecido for gatilho in gatilhos):
-                try:
-                    asyncio.run_coroutine_threadsafe(
-                        websocket.send_json({"estado": "processando", "mensagem": "PROCESSANDO SEUS RUÍDOS..."}),
-                        loop
-                    )
-                except Exception:
-                    pass
-                
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    websocket.send_json({"estado": "processando", "mensagem": "PROCESSANDO SEUS RUÍDOS..."}),
+                    loop
+                )
+            except Exception:
+                pass
+            
+            # Chama o Cérebro (Gemini)
+            try:
                 resposta_ia = model_gemini.generate_content(texto_reconhecido)
                 texto_resposta = resposta_ia.text.strip()
-                
-                print(f"C.Y.N.I.C.: {texto_resposta}")
-                
-                try:
-                    asyncio.run_coroutine_threadsafe(
-                        websocket.send_json({"estado": "respondendo", "mensagem": f"{texto_resposta}"}),
-                        loop
-                    )
-                except Exception:
-                    pass
-                
-                import time
-                time.sleep(8) 
+            except Exception as gemini_err:
+                print(f"ERRO NA API DO GEMINI: {gemini_err}")
+                texto_resposta = f"Erro na conexão com o meu cérebro brilhante: {gemini_err}"
+            
+            print(f"C.Y.N.I.C.: {texto_resposta}")
+            
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    websocket.send_json({"estado": "respondendo", "mensagem": f"C.Y.N.I.C.: {texto_resposta}"}),
+                    loop
+                )
+            except Exception:
+                pass
+            
+            import time
+            time.sleep(8) 
             
         except Exception as e:
             print(f"Aviso no ciclo de áudio: {e}")
