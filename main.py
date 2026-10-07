@@ -31,7 +31,7 @@ model_gemini = genai.GenerativeModel(
 app = FastAPI()
 
 print("Iniciando motores... Carregando o modelo Whisper (aguarde).")
-model_whisper = whisper.load_model("tiny") 
+model_whisper = whisper.load_model("small") 
 print("C.Y.N.I.C.: Sistema de áudio carregado com sucesso!")
 
 html = """
