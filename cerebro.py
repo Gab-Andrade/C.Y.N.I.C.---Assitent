@@ -34,7 +34,7 @@ def consultar_ia(texto_usuario):
     try:
         if IA_ATIVA == "GROQ":
             completion = client_groq.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-120b",
                 messages=[
                     {"role": "system", "content": system_instruction},
                     {"role": "user", "content": texto_usuario}
