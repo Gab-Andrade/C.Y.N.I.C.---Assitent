@@ -12,6 +12,7 @@
 <body data-estado="offline">
 
     <!-- camadas de fundo -->
+    <canvas id="chuva" aria-hidden="true"></canvas>
     <canvas id="cena" aria-hidden="true"></canvas>
     <div class="scan" aria-hidden="true"></div>
     <div class="vinheta" aria-hidden="true"></div>
@@ -44,11 +45,17 @@
             <div class="barra"><span>NÚCLEO</span><i><b id="b-nucleo"></b></i></div>
             <div class="barra"><span>SINAPSES</span><i><b id="b-sinapses"></b></i></div>
             <div class="barra"><span>FLUXO NEURAL</span><i><b id="b-fluxo"></b></i></div>
+            <pre id="hex" aria-hidden="true"></pre>
         </section>
 
         <section class="painel dir" aria-label="Comunicações">
             <h2>COMUNICAÇÕES</h2>
             <ol id="log"></ol>
+        </section>
+
+        <section class="painel radar dir2" aria-hidden="true">
+            <h2>VARREDURA</h2>
+            <canvas id="radar" width="240" height="240"></canvas>
         </section>
 
         <main class="centro">

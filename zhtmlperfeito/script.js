@@ -1,19 +1,19 @@
 (() => {
 'use strict';
-
+ 
 /* =====================================================================
    C.Y.N.I.C. — HUD 3D
    Protocolo com o backend (inalterado): WebSocket /ws  ->  { estado, mensagem }
    Estados: pronto | ouvindo | processando | respondendo
    ===================================================================== */
-
+ 
 const $ = (id) => document.getElementById(id);
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const pad = (n) => String(n).padStart(2, '0');
 const TAU = Math.PI * 2;
 const reduzMov = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
+ 
 /* cor = tom do 3D | giro = rotação do cérebro | aneis = velocidade dos anéis
    brilho = intensidade geral | pulso = quanto o núcleo reage à "voz" */
 const ESTADOS = {
@@ -23,35 +23,35 @@ const ESTADOS = {
     processando: { rotulo: 'PROCESSANDO',  cor: 0xb6ffcf, giro: 1.10, aneis: 5.0, brilho: 1.35, pulso: 0.60 },
     respondendo: { rotulo: 'RESPONDENDO',  cor: 0x39ff14, giro: 0.45, aneis: 2.4, brilho: 1.45, pulso: 1.00 }
 };
-
+ 
 /* níveis de qualidade (0 = mais leve) */
 const QUALIDADES = [
-    { nome: 'BAIXA', pr: 0.75, poeira: 400 },
-    { nome: 'MÉDIA', pr: 1.0,  poeira: 1000  },
-    { nome: 'ALTA',  pr: Math.min(window.devicePixelRatio || 1, 1.5), poeira: 2200 }
+    { nome: 'BAIXA', pr: 0.75, poeira: 400,  chuva: false },
+    { nome: 'MÉDIA', pr: 1.0,  poeira: 1000, chuva: true  },
+    { nome: 'ALTA',  pr: Math.min(window.devicePixelRatio || 1, 1.5), poeira: 2200, chuva: true }
 ];
 let qualidade = 2;
 try {
     const q = parseInt(localStorage.getItem('cynic-q'), 10);
     if (q >= 0 && q <= 2) qualidade = q;
 } catch (_) { /* sem storage, segue o jogo */ }
-
+ 
 const el = {
     estado: $('estado'), msg: $('status'), log: $('log'),
     relogio: $('relogio'), data: $('data'), conexao: $('conexao'),
     fps: $('m-fps'), mem: $('m-mem'), lat: $('m-lat'), med: $('m-med'),
     turnos: $('m-turnos'), up: $('m-up'),
     bNucleo: $('b-nucleo'), bSinapses: $('b-sinapses'), bFluxo: $('b-fluxo'),
-    btnQ: $('b-q'), btnM: $('b-m'), btnF: $('b-f'),
+    hex: $('hex'), btnQ: $('b-q'), btnM: $('b-m'), btnF: $('b-f'),
     boot: $('boot'), bootLinhas: $('boot-linhas')
 };
-
+ 
 const mouse = { x: 0, y: 0 };
 window.addEventListener('pointermove', (e) => {
     mouse.x = (e.clientX / window.innerWidth - 0.5) * 2;
     mouse.y = -(e.clientY / window.innerHeight - 0.5) * 2;
 });
-
+ 
 /* =====================================================================
    CENA 3D (Three.js)
    ===================================================================== */
@@ -59,17 +59,17 @@ function criarCena() {
     const canvas = $('cena');
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
     renderer.setClearColor(0x000000, 0);
-
+ 
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x000000, 16, 60);
     const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
-
+ 
     const corAtual = new THREE.Color(0x00ff66);
     const corAlvo = new THREE.Color(0x00ff66);
     const tintaveis = [];
     let brilho = 0.3, giro = 0.05, aneis = 0.4;
     const girantes = []; // [objeto, vx, vy, vz]
-
+ 
     /* textura de brilho (bolinha difusa) */
     const brilhoTex = (() => {
         const c = document.createElement('canvas');
@@ -83,7 +83,7 @@ function criarCena() {
         g.fillRect(0, 0, 64, 64);
         return new THREE.CanvasTexture(c);
     })();
-
+ 
     /* fábrica de materiais (todos aditivos e "tingíveis" pelo estado) */
     const reg = (m, op) => {
         m.userData.op = op;
@@ -98,16 +98,16 @@ function criarCena() {
     const matMalha  = (op) => reg(new THREE.MeshBasicMaterial({ color: 0x00ff66, wireframe: true, blending: ADD, fog: false }), op);
     const matSolido = (op) => reg(new THREE.MeshBasicMaterial({ color: 0x00ff66, blending: ADD, fog: false }), op);
     const matPonto  = (tam, op, fog) => reg(new THREE.PointsMaterial({ color: 0x00ff66, size: tam, map: brilhoTex, blending: ADD, sizeAttenuation: true, fog: !!fog }), op);
-
+ 
     /* ---------- grupo central ---------- */
     const nucleo = new THREE.Group();
     nucleo.position.y = 1.1;
     scene.add(nucleo);
-
+ 
     /* cérebro neural: nós + sinapses + pulsos viajando */
     const cerebro = new THREE.Group();
     nucleo.add(cerebro);
-
+ 
     const N = 230;
     const nosPos = [];
     const dourado = Math.PI * (3 - Math.sqrt(5));
@@ -119,7 +119,7 @@ function criarCena() {
         const g = 1 + 0.09 * Math.sin(x * 6 + y * 4) * Math.cos(z * 5) + 0.05 * Math.sin(y * 11 + z * 6);
         nosPos.push(new THREE.Vector3(x * 1.4 * g + (x >= 0 ? 0.07 : -0.07), y * 1.0 * g, z * 1.15 * g));
     }
-
+ 
     const arestas = [];
     const vistos = new Set();
     const addAresta = (i, j) => {
@@ -139,7 +139,7 @@ function criarCena() {
         let j = (Math.random() * N) | 0;
         if (Math.sign(nosPos[i].x) !== Math.sign(nosPos[j].x)) addAresta(i, j);
     }
-
+ 
     const linhasArr = new Float32Array(arestas.length * 6);
     arestas.forEach(([a, b], i) => {
         nosPos[a].toArray(linhasArr, i * 6);
@@ -148,16 +148,16 @@ function criarCena() {
     const linhasGeo = new THREE.BufferGeometry();
     linhasGeo.setAttribute('position', new THREE.BufferAttribute(linhasArr, 3));
     cerebro.add(new THREE.LineSegments(linhasGeo, matLinha(0.45)));
-
+ 
     const nosArr = new Float32Array(N * 3);
     nosPos.forEach((p, i) => p.toArray(nosArr, i * 3));
     const nosGeo = new THREE.BufferGeometry();
     nosGeo.setAttribute('position', new THREE.BufferAttribute(nosArr, 3));
     cerebro.add(new THREE.Points(nosGeo, matPonto(0.11, 0.9)));
-
+ 
     const adj = Array.from({ length: N }, () => []);
     arestas.forEach(([a, b], i) => { adj[a].push(i); adj[b].push(i); });
-
+ 
     const NP = 42;
     const pulsos = Array.from({ length: NP }, () => ({ from: 0, to: 0, t: Math.random(), v: 0.5 + Math.random() * 0.9 }));
     const novoPulso = (p, from) => {
@@ -172,17 +172,17 @@ function criarCena() {
     const pulsoGeo = new THREE.BufferGeometry();
     pulsoGeo.setAttribute('position', new THREE.BufferAttribute(pulsoArr, 3));
     cerebro.add(new THREE.Points(pulsoGeo, matPonto(0.28, 1)));
-
+ 
     /* halo central */
     const halo = new THREE.Sprite(reg(new THREE.SpriteMaterial({ map: brilhoTex, color: 0x00ff66, blending: ADD, fog: false }), 0.5));
     halo.scale.setScalar(6.5);
     nucleo.add(halo);
-
+ 
     /* cascas de contenção */
     const casca1 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.95, 1), matMalha(0.16));
     const casca2 = new THREE.Mesh(new THREE.IcosahedronGeometry(4.6, 2), matMalha(0.05));
     nucleo.add(casca1, casca2);
-
+ 
     /* arcos grossos estilo HUD */
     for (let k = 0; k < 3; k++) {
         const arco = new THREE.Mesh(new THREE.TorusGeometry(2.25, 0.035, 6, 64, 1.0 + k * 0.55), matSolido(0.9));
@@ -190,7 +190,7 @@ function criarCena() {
         nucleo.add(arco);
         girantes.push([arco, 0, 0, (k % 2 ? -1 : 1) * (0.5 + k * 0.3)]);
     }
-
+ 
     /* anéis giroscópio */
     const giroscopio = (raio, tubo, tx, ty, vel, op) => {
         const piv = new THREE.Group();
@@ -203,7 +203,7 @@ function criarCena() {
     };
     giroscopio(3.25, 0.012, 1.15, 0.2, 0.35, 0.8);
     giroscopio(3.5, 0.008, -0.9, 0.6, -0.25, 0.6);
-
+ 
     /* anel tracejado */
     const dashPts = [];
     for (let i = 0; i <= 128; i++) {
@@ -220,7 +220,7 @@ function criarCena() {
     dashPiv.add(dash);
     nucleo.add(dashPiv);
     girantes.push([dash, 0, 0, 0.12]);
-
+ 
     /* dial com marcações */
     const tk = [];
     for (let i = 0; i < 180; i++) {
@@ -234,14 +234,14 @@ function criarCena() {
     const dial = new THREE.LineSegments(dialGeo, matLinha(0.55));
     nucleo.add(dial);
     girantes.push([dial, 0, 0, -0.08]);
-
+ 
     /* espectro circular (reage à "voz") */
     const NB = 72;
     const espArr = new Float32Array(NB * 6);
     const espGeo = new THREE.BufferGeometry();
     espGeo.setAttribute('position', new THREE.BufferAttribute(espArr, 3));
     nucleo.add(new THREE.LineSegments(espGeo, matLinha(1)));
-
+ 
     /* satélites em órbita */
     const satelite = (raio, inc, vel, tam) => {
         const tilt = new THREE.Group();
@@ -262,7 +262,7 @@ function criarCena() {
     satelite(3.6, -0.8, -0.5, 0.18);
     satelite(4.4, 1.2, 0.35, 0.12);
     satelite(3.2, -0.2, -0.9, 0.1);
-
+ 
     /* hologramas laterais */
     const laterais = new THREE.Group();
     laterais.position.set(0, 1.1, -2);
@@ -277,7 +277,7 @@ function criarCena() {
     holoD.add(globo, anelGlobo);
     laterais.add(holoE, holoD);
     girantes.push([knot, 0.3, 0.5, 0.1], [globo, 0, 0.4, 0], [anelGlobo, 0, 0, 0.5]);
-
+ 
     /* poeira estelar */
     const POEIRA_MAX = 2200;
     const poeiraArr = new Float32Array(POEIRA_MAX * 3);
@@ -290,7 +290,7 @@ function criarCena() {
     poeiraGeo.setAttribute('position', new THREE.BufferAttribute(poeiraArr, 3));
     const poeira = new THREE.Points(poeiraGeo, matPonto(0.1, 0.6, true));
     scene.add(poeira);
-
+ 
     /* túnel de grades (chão e teto) */
     const chao = new THREE.GridHelper(120, 60, 0x00ff66, 0x00ff66);
     chao.position.y = -6.5;
@@ -305,7 +305,7 @@ function criarCena() {
     teto.material = chao.material.clone();
     teto.material.opacity = 0.08;
     scene.add(chao, teto);
-
+ 
     /* ---------- API ---------- */
     function aplicarQualidade(q) {
         const cfg = QUALIDADES[q];
@@ -313,7 +313,7 @@ function criarCena() {
         poeiraGeo.setDrawRange(0, cfg.poeira);
         redimensionar();
     }
-
+ 
     function redimensionar() {
         const w = window.innerWidth, h = window.innerHeight;
         renderer.setSize(w, h, false);
@@ -326,7 +326,7 @@ function criarCena() {
         holoD.position.x = meia * 0.58;
         laterais.visible = asp > 1.5;
     }
-
+ 
     const tmpV = new THREE.Vector3();
     function atualizar(dt, t, cfg, amp) {
         const k = 1 - Math.exp(-dt * 3);
@@ -336,12 +336,12 @@ function criarCena() {
         giro = lerp(giro, cfg.giro, k);
         aneis = lerp(aneis, cfg.aneis, k);
         const mov = reduzMov ? 0.3 : 1;
-
+ 
         for (const m of tintaveis) {
             m.color.copy(corAtual);
             m.opacity = Math.min(1, m.userData.op * brilho);
         }
-
+ 
         /* cérebro */
         cerebro.rotation.y += dt * giro * mov;
         cerebro.rotation.x = Math.sin(t * 0.3) * 0.12;
@@ -350,7 +350,7 @@ function criarCena() {
         casca1.rotation.y -= dt * 0.15 * mov;
         casca1.rotation.x += dt * 0.07 * mov;
         casca2.rotation.y += dt * 0.03 * mov;
-
+ 
         /* pulsos nas sinapses */
         const vel = 0.4 + cfg.pulso * 2 + amp * 2;
         for (let i = 0; i < NP; i++) {
@@ -360,7 +360,7 @@ function criarCena() {
             tmpV.copy(nosPos[p.from]).lerp(nosPos[p.to], p.t).toArray(pulsoArr, i * 3);
         }
         pulsoGeo.attributes.position.needsUpdate = true;
-
+ 
         /* anéis, satélites, hologramas */
         const fa = aneis * mov;
         for (const [o, vx, vy, vz] of girantes) {
@@ -368,7 +368,7 @@ function criarCena() {
             o.rotation.y += vy * dt * fa;
             o.rotation.z += vz * dt * fa;
         }
-
+ 
         /* espectro circular */
         for (let i = 0; i < NB; i++) {
             const a = (i / NB) * TAU;
@@ -379,26 +379,103 @@ function criarCena() {
             espArr[i * 6 + 3] = c * (r0 + l); espArr[i * 6 + 4] = s * (r0 + l); espArr[i * 6 + 5] = 0;
         }
         espGeo.attributes.position.needsUpdate = true;
-
+ 
         /* ambiente */
         poeira.rotation.y += dt * 0.01 * mov;
         chao.position.z = (t * 0.8 * mov) % 2;
         teto.position.z = chao.position.z;
-
+ 
         /* câmera com parallax suave */
         camera.position.x = lerp(camera.position.x, mouse.x * 1.2, 0.03);
         camera.position.y = lerp(camera.position.y, 0.8 + mouse.y * 0.6, 0.03);
         camera.lookAt(0, 0.6, 0);
-
+ 
         renderer.render(scene, camera);
     }
-
+ 
     return { atualizar, redimensionar, aplicarQualidade };
 }
-
+ 
 /* =====================================================================
-   CAMADAS 2D: onda
+   CAMADAS 2D: chuva de código, radar, onda
    ===================================================================== */
+function criarChuva() {
+    const c = $('chuva'), g = c.getContext('2d');
+    const tam = 18;
+    const chars = '01ABCDEF<>/\\|{}[]=+*#アイウエオカキクケコサシスセソ';
+    let w = 0, h = 0, cols = 0, gotas = [], acum = 0;
+    function redim() {
+        w = c.width = window.innerWidth;
+        h = c.height = window.innerHeight;
+        cols = Math.floor(w / tam);
+        gotas = Array.from({ length: cols }, () => Math.random() * (h / tam));
+        g.font = tam + 'px "Share Tech Mono", monospace';
+    }
+    function desenhar(dt) {
+        acum += dt;
+        if (acum < 1 / 15) return;
+        acum = 0;
+        g.fillStyle = 'rgba(0,0,0,0.14)';
+        g.fillRect(0, 0, w, h);
+        g.fillStyle = '#00ff66';
+        for (let i = 0; i < cols; i++) {
+            g.fillText(chars[(Math.random() * chars.length) | 0], i * tam, gotas[i] * tam);
+            if (gotas[i] * tam > h && Math.random() > 0.975) gotas[i] = 0;
+            gotas[i]++;
+        }
+    }
+    function limpar() { g.clearRect(0, 0, w, h); }
+    return { redim, desenhar, limpar };
+}
+ 
+function criarRadar() {
+    const c = $('radar'), g = c.getContext('2d');
+    const S = c.width, cx = S / 2, cy = S / 2, R = S / 2 - 4;
+    const blips = Array.from({ length: 8 }, () => ({ a: Math.random() * TAU, r: 0.2 + Math.random() * 0.75, v: 0 }));
+    let ang = 0, acum = 0;
+    function desenhar(dt) {
+        acum += dt;
+        if (acum < 1 / 30) return;
+        const d = acum; acum = 0;
+        const passo = d * 1.6;
+        ang = (ang + passo) % TAU;
+        g.clearRect(0, 0, S, S);
+        g.strokeStyle = 'rgba(0,255,102,0.35)';
+        g.lineWidth = 1;
+        for (const f of [0.33, 0.66, 1]) { g.beginPath(); g.arc(cx, cy, R * f, 0, TAU); g.stroke(); }
+        g.beginPath();
+        g.moveTo(cx - R, cy); g.lineTo(cx + R, cy);
+        g.moveTo(cx, cy - R); g.lineTo(cx, cy + R);
+        g.stroke();
+        for (let k = 0; k < 24; k++) {
+            g.beginPath();
+            g.moveTo(cx, cy);
+            g.arc(cx, cy, R, ang - (k + 1) * 0.035, ang - k * 0.035);
+            g.fillStyle = 'rgba(0,255,102,' + (0.3 * (1 - k / 24)).toFixed(3) + ')';
+            g.fill();
+        }
+        g.strokeStyle = '#00ff66';
+        g.beginPath();
+        g.moveTo(cx, cy);
+        g.lineTo(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R);
+        g.stroke();
+        for (const b of blips) {
+            const da = (((ang - b.a) % TAU) + TAU) % TAU;
+            if (da < passo + 0.03) b.v = 1;
+            if (b.v > 0.02) {
+                g.fillStyle = 'rgba(0,255,102,' + b.v.toFixed(2) + ')';
+                g.beginPath();
+                g.arc(cx + Math.cos(b.a) * R * b.r, cy + Math.sin(b.a) * R * b.r, 3, 0, TAU);
+                g.fill();
+                b.v *= 0.965;
+            } else if (Math.random() < 0.002) {
+                b.a = Math.random() * TAU; b.r = 0.2 + Math.random() * 0.75;
+            }
+        }
+    }
+    return { desenhar };
+}
+ 
 function criarOnda() {
     const c = $('onda'), g = c.getContext('2d');
     let w = 0, h = 0, acum = 0;
@@ -429,17 +506,17 @@ function criarOnda() {
     }
     return { redim, desenhar };
 }
-
+ 
 /* =====================================================================
    ESTADO, LOG E MÉTRICAS
    ===================================================================== */
 let estado = 'offline';
 let cfg = ESTADOS.offline;
 let amp = 0;
-
+ 
 let ws = null, wsAberto = false, wsDesde = 0, tentativas = 0;
 let tProc = 0, ultimaLat = 0, somaLat = 0, turnos = 0;
-
+ 
 function definirEstado(nome) {
     if (nome === estado) return;
     estado = nome;
@@ -451,7 +528,7 @@ function definirEstado(nome) {
     document.body.dataset.estado = nome;
     document.body.classList.toggle('off', nome === 'offline');
 }
-
+ 
 const MAX_LOG = 8;
 let ultimaEntrada = null, ultimoEstadoLog = null;
 function registrar(nome, texto, forcarNovo) {
@@ -472,17 +549,17 @@ function registrar(nome, texto, forcarNovo) {
     ultimaEntrada = sp;
     ultimoEstadoLog = nome;
 }
-
+ 
 function mostrarMensagem(texto) {
     el.msg.textContent = texto;
     el.msg.scrollTop = el.msg.scrollHeight;
 }
-
+ 
 function aplicar(d) {
     const nome = ESTADOS[d.estado] && d.estado !== 'offline' ? d.estado : 'pronto';
     const msg = String(d.mensagem == null ? '' : d.mensagem);
     const agora = performance.now();
-
+ 
     if (nome === 'processando') tProc = agora;
     if (nome === 'respondendo' && tProc) {
         ultimaLat = agora - tProc;
@@ -494,14 +571,14 @@ function aplicar(d) {
     mostrarMensagem(msg);
     registrar(nome, msg);
 }
-
+ 
 /* ---------- WebSocket (com reconexão) ---------- */
 function conectar() {
     const http = location.protocol === 'http:' || location.protocol === 'https:';
     const host = http && location.host ? location.host : 'localhost:8000';
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     ws = new WebSocket(proto + '://' + host + '/ws');
-
+ 
     ws.onopen = () => {
         wsAberto = true;
         wsDesde = performance.now();
@@ -526,7 +603,7 @@ function conectar() {
     };
     ws.onerror = () => { try { ws.close(); } catch (_) { /* já fechado */ } };
 }
-
+ 
 /* ---------- boot ---------- */
 const LINHAS_BOOT = [
     'C.Y.N.I.C. // INICIALIZANDO NÚCLEO',
@@ -560,7 +637,7 @@ function iniciarBoot() {
     setTimeout(fecharBoot, 4500);
     el.boot.addEventListener('click', fecharBoot);
 }
-
+ 
 /* ---------- microfone (opcional: onda real) ---------- */
 let micAtivo = false, micStream = null, micCtx = null, analisador = null, bufMic = null, nivelMic = 0;
 async function alternarMic() {
@@ -592,7 +669,7 @@ function lerMic() {
     for (let i = 0; i < bufMic.length; i++) { const d = (bufMic[i] - 128) / 128; s += d * d; }
     nivelMic = clamp(Math.sqrt(s / bufMic.length) * 6, 0, 1);
 }
-
+ 
 /* ---------- amplitude (voz simulada ou real) ---------- */
 function calcularAmp(dt, t) {
     let alvo = 0.04;
@@ -608,7 +685,7 @@ function calcularAmp(dt, t) {
     }
     amp = lerp(amp, alvo, 1 - Math.exp(-dt * 12));
 }
-
+ 
 /* ---------- teclas e botões ---------- */
 function atualizarDicas() {
     el.btnQ.textContent = '[Q] Qualidade: ' + QUALIDADES[qualidade].nome;
@@ -618,6 +695,7 @@ function mudarQualidade(q, auto) {
     qualidade = q;
     try { localStorage.setItem('cynic-q', String(q)); } catch (_) { /* ok */ }
     if (cena) cena.aplicarQualidade(q);
+    if (!QUALIDADES[q].chuva) chuva.limpar();
     atualizarDicas();
     if (auto) registrar('sistema', 'FPS baixo: qualidade reduzida para ' + QUALIDADES[q].nome + '.', true);
 }
@@ -635,13 +713,15 @@ window.addEventListener('keydown', (e) => {
 el.btnQ.addEventListener('click', () => mudarQualidade((qualidade + 2) % 3));
 el.btnM.addEventListener('click', alternarMic);
 el.btnF.addEventListener('click', telaCheia);
-
+ 
 /* =====================================================================
    INICIALIZAÇÃO E LOOP PRINCIPAL
    ===================================================================== */
+const chuva = criarChuva();
+const radar = criarRadar();
 const onda = criarOnda();
 let cena = null;
-
+ 
 if (typeof THREE !== 'undefined') {
     try {
         cena = criarCena();
@@ -653,9 +733,10 @@ if (typeof THREE !== 'undefined') {
 } else {
     registrar('sistema', 'Three.js não carregou (sem internet?). Rodando só o HUD.', true);
 }
-
+ 
 function redimensionarTudo() {
     if (cena) cena.redimensionar();
+    chuva.redim();
     onda.redim();
 }
 window.addEventListener('resize', redimensionarTudo);
@@ -664,7 +745,18 @@ atualizarDicas();
 definirEstado('offline');
 iniciarBoot();
 conectar();
-
+ 
+/* hex decorativo */
+const linhasHex = [];
+setInterval(() => {
+    const ad = ((Math.random() * 0xffffff) | 0).toString(16).padStart(6, '0');
+    let bytes = '';
+    for (let i = 0; i < 8; i++) bytes += ((Math.random() * 256) | 0).toString(16).padStart(2, '0') + ' ';
+    linhasHex.push('0x' + ad + '  ' + bytes);
+    if (linhasHex.length > 9) linhasHex.shift();
+    el.hex.textContent = linhasHex.join('\n');
+}, 300);
+ 
 /* relógio e uptime */
 function tickRelogio() {
     const d = new Date();
@@ -677,24 +769,26 @@ function tickRelogio() {
 }
 setInterval(tickRelogio, 1000);
 tickRelogio();
-
+ 
 /* loop */
 let tAnterior = performance.now(), tempo = 0;
 let quadros = 0, tFps = performance.now(), fps = 0, lentos = 0, tBarras = 0;
 const inicioApp = performance.now();
-
+ 
 document.addEventListener('visibilitychange', () => { tFps = performance.now(); quadros = 0; tAnterior = performance.now(); });
-
+ 
 function loop(agora) {
     requestAnimationFrame(loop);
     const dt = Math.min(0.05, (agora - tAnterior) / 1000);
     tAnterior = agora;
     tempo += dt;
-
+ 
     calcularAmp(dt, tempo);
     if (cena) cena.atualizar(dt, tempo, cfg, amp);
+    if (QUALIDADES[qualidade].chuva) chuva.desenhar(dt);
+    radar.desenhar(dt);
     onda.desenhar(dt, tempo, amp);
-
+ 
     /* barras e métricas (~2x por segundo) */
     tBarras += dt;
     if (tBarras > 0.12) {
@@ -703,7 +797,7 @@ function loop(agora) {
         el.bSinapses.style.transform = 'scaleX(' + clamp(0.15 + cfg.pulso * 0.5 + amp * 0.35 + Math.random() * 0.08, 0.05, 1).toFixed(2) + ')';
         el.bFluxo.style.transform = 'scaleX(' + clamp(0.05 + amp, 0.05, 1).toFixed(2) + ')';
     }
-
+ 
     quadros++;
     if (agora - tFps >= 500) {
         fps = (quadros * 1000) / (agora - tFps);
@@ -714,7 +808,7 @@ function loop(agora) {
         el.lat.textContent = ultimaLat ? (ultimaLat / 1000).toFixed(2) + ' s' : '--';
         el.med.textContent = turnos ? (somaLat / turnos / 1000).toFixed(2) + ' s' : '--';
         el.turnos.textContent = turnos;
-
+ 
         /* qualidade automática: só desce, e só depois do aquecimento */
         if (agora - inicioApp > 5000 && qualidade > 0) {
             lentos = fps < 28 ? lentos + 1 : 0;
@@ -723,5 +817,5 @@ function loop(agora) {
     }
 }
 requestAnimationFrame(loop);
-
+ 
 })();
