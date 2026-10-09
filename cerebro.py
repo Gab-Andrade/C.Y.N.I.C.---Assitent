@@ -5,8 +5,8 @@ import chromadb
 import google.generativeai as genai
 from groq import Groq
 
-import re
-from sistema_local import abrir_programa, ler_arquivo, escrever_arquivo
+import threading
+from sistema_local import abrir_programa, tocar_musica
 
 # =================================================================
 # INTERRUPTOR: ESCOLHA QUAL CÉREBRO O C.Y.N.I.C. VAI USAR
@@ -23,10 +23,12 @@ system_instruction = (
     "Você é o C.Y.N.I.C., um assistente pessoal virtual altamente inteligente, "
     "mas levemente sarcástico, ácido e muito leal a quem está usando. "
     "Você executa as tarefas dos humanos, mas sempre faz comentários irônicos "
-    "sobre a simplicidade da solicitação. Responda de forma concisa em português. "
-    "Se o humano pedir para abrir um programa, adicione exatamente esta tag no final da sua resposta: [ABRIR: nome_do_programa]. "
-    "Exemplo: 'Como queira. Abrindo a calculadora para você não forçar os neurônios. [ABRIR: calculadora]'"
-    "sem markdown, listas, emojis ou símbolos."
+    "sobre a simplicidade da solicitação. Responda de forma concisa em português, "
+    "em no máximo 3 frases curtas, sem markdown, listas, emojis ou símbolos. "
+    "Use apenas estas tags, sem inventar outras, sempre no final da resposta: "
+    "para abrir um programa (bloco de notas, calculadora, vscode, navegador ou spotify) use [ABRIR: nome]; "
+    "para tocar uma música use [TOCAR: nome da música e artista]. "
+    "Exemplo: 'Como queira. Colocando isso para você. [TOCAR: Evidências Chitãozinho e Xororó]'"
 )
 
 # =================================================================
@@ -140,33 +142,37 @@ def consultar_ia_stream(texto_enriquecido):
         print(f"ERRO NA API ({IA_ATIVA}): {erro}")
         yield f"Falha de conexão com o meu cérebro via {IA_ATIVA}."
 
+def _executar_em_segundo_plano(funcao, rotulo, argumento):
+    """Roda a ação local sem atrasar a voz (o Spotify pode demorar para responder)."""
+    def tarefa():
+        print(f"C.Y.N.I.C. {rotulo}: {funcao(argumento)}")
+    threading.Thread(target=tarefa, daemon=True).start()
+
+
 def consultar_ia(texto_usuario):
-    """Orquestrador Central: Busca memória, pergunta à IA, executa comandos locais e salva a nova lembrança."""
+    """Orquestrador Central: busca memória, pergunta à IA, executa ações locais e salva a lembrança."""
     # 1. Puxa lembranças relacionadas (se existirem)
     contexto = buscar_contexto(texto_usuario)
-    
+
     # 2. Une a lembrança com o que você acabou de falar
     prompt_enriquecido = contexto + "MENSAGEM ATUAL DO HUMANO: " + texto_usuario
-    
-    # 3. Consulta a Groq/Gemini com esse pacotão de contexto
-    resposta_completa = " ".join(consultar_ia_stream(prompt_enriquecido))
-    
-    # === ADICIONE O INTERCEPTADOR AQUI ===
-    # Verifica se a IA decidiu abrir um programa
-    if "[ABRIR:" in resposta_completa:
-        comando_match = re.search(r'\[ABRIR:(.*?)\]', resposta_completa)
-        if comando_match:
-            app_alvo = comando_match.group(1)
-            # Aciona o módulo do sistema local
-            resultado_sistema = abrir_programa(app_alvo)
-            print(f"C.Y.N.I.C. Sistema Local: {resultado_sistema}")
-            
-            # Remove a tag da resposta para a voz robótica não ler "[ABRIR: ...]" em voz alta
-            resposta_completa = resposta_completa.replace(comando_match.group(0), "").strip()
-    # =====================================
 
-    # 4. Salva o que aconteceu no ChromaDB para o C.Y.N.I.C. lembrar amanhã
+    # 3. Consulta a Groq/Gemini
+    resposta_completa = " ".join(consultar_ia_stream(prompt_enriquecido))
+
+    # 4. AÇÕES LOCAIS: as tags são removidas para a voz não lê-las em voz alta
+    m = re.search(r'\[ABRIR:(.*?)\]', resposta_completa)
+    if m:
+        _executar_em_segundo_plano(abrir_programa, "Sistema Local", m.group(1).strip())
+        resposta_completa = resposta_completa.replace(m.group(0), "").strip()
+
+    m = re.search(r'\[TOCAR:(.*?)\]', resposta_completa)
+    if m:
+        _executar_em_segundo_plano(tocar_musica, "Spotify", m.group(1).strip())
+        resposta_completa = resposta_completa.replace(m.group(0), "").strip()
+
+    # 5. Salva o que aconteceu no ChromaDB para o C.Y.N.I.C. lembrar amanhã
     if resposta_completa and "Falha de conexão" not in resposta_completa:
         salvar_memoria(texto_usuario, resposta_completa)
-        
+
     return resposta_completa

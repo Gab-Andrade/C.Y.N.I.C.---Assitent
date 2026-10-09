@@ -1,5 +1,8 @@
-﻿(.venv/
+.venv*/
 __pycache__/
-temp_audio.wav)
-(ztestesIA)
-(zhtmlperfeito)
+memoria_cynic/
+.cache
+.env
+temp_audio.wav
+ztestesIA/
+zhtmlperfeito/
