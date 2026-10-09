@@ -13,7 +13,7 @@ from sistema_local import abrir_programa, ler_arquivo, escrever_arquivo
 # =================================================================
 IA_ATIVA = "GROQ"
 
-CHAVE_API_GROQ = os.environ.get("GROQ_API_KEY", "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")
+CHAVE_API_GROQ = os.environ.get("GROQ_API_KEY", "")
 CHAVE_API_GEMINI = os.environ.get("GEMINI_API_KEY", "")
 
 MODELO_GROQ = "openai/gpt-oss-120b"  # Modelo rápido e estável no plano gratuito
