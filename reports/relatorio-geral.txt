@@ -1,0 +1,14 @@
+﻿Relatório geral do projeto C.Y.N.I.C.
+
+- Código da aplicação organizado no pacote app/
+- Ponto de entrada FastAPI: app/main.py
+- Cérebro, integração de IA e memória: app/cerebro.py
+- Skills atuais: app/skills/sistema_local.py e app/skills/workspace_google.py
+- Configuração central de caminhos: app/config.py
+- Frontend web: app/static/
+- Memória, áudios e diretório reservado a logs: app/storage/
+- Credenciais e token OAuth Google: app/credentials/ e app/tokens/
+- Documentação principal: README.md; arquitetura: docs/arquitetura.md
+- Relatórios do projeto: reports/
+- Spotify permanece dentro de sistema_local.py; ainda não foi separado em módulo próprio
+- Arquivos locais de credenciais, tokens e memória não devem ser publicados

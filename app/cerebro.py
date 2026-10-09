@@ -1,13 +1,15 @@
 import os
 import re
+import threading
 import uuid
+
 import chromadb
 import google.generativeai as genai
 from groq import Groq
-from workspace_google import ler_agenda, ler_emails
 
-import threading
-from sistema_local import abrir_programa, tocar_musica
+from app.config import MEMORIA_DIR
+from app.skills.sistema_local import abrir_programa, tocar_musica
+from app.skills.workspace_google import ler_agenda, ler_emails
 
 # =================================================================
 # INTERRUPTOR: ESCOLHA QUAL CÉREBRO O C.Y.N.I.C. VAI USAR
@@ -17,7 +19,7 @@ IA_ATIVA = "GROQ"
 CHAVE_API_GROQ = os.environ.get("GROQ_API_KEY", "")
 CHAVE_API_GEMINI = os.environ.get("GEMINI_API_KEY", "")
 
-MODELO_GROQ = "openai/gpt-oss-120b"  # Modelo rápido e estável no plano gratuito
+MODELO_GROQ = "openai/gpt-oss-120b"
 MODELO_GEMINI = "gemini-3.5-flash"
 
 system_instruction = (
@@ -38,22 +40,21 @@ system_instruction = (
 # MEMÓRIA DE LONGO PRAZO (CHROMADB)
 # =================================================================
 print("Iniciando lóbulo frontal (Memória ChromaDB)...")
-# Cria uma pasta local para persistir as memórias no seu PC
-chroma_client = chromadb.PersistentClient(path="./memoria_cynic")
+chroma_client = chromadb.PersistentClient(path=str(MEMORIA_DIR))
 memoria = chroma_client.get_or_create_collection(name="historico_cynic")
+
 
 def buscar_contexto(texto):
     """Busca as 2 conversas passadas mais relevantes em relação ao texto atual."""
-    # O try/except evita falhas caso o banco esteja vazio na primeira vez
     try:
         resultados = memoria.query(query_texts=[texto], n_results=2)
         documentos = resultados.get('documents', [[]])[0]
         if not documentos:
             return ""
-        # Informa à IA que isso é uma lembrança para ela usar de contexto
         return " [LEMBRANÇAS DO PASSADO: " + " | ".join(documentos) + "] "
     except Exception:
         return ""
+
 
 def salvar_memoria(texto_usuario, texto_resposta):
     """Salva a interação atual no banco de dados vetorial para o futuro."""
@@ -75,15 +76,14 @@ if CHAVE_API_GEMINI:
 
 client_groq = Groq(api_key=CHAVE_API_GROQ, timeout=20.0) if CHAVE_API_GROQ else None
 
-# ---------------------------------------------------------------
-# Utilitários: dividir o texto em frases e limpar para a voz
-# ---------------------------------------------------------------
 _FIM_FRASE = re.compile(r'(.+?[.!?…])\s+', re.S)
 _MIN_CHARS = 15
+
 
 def _limpar_para_fala(texto):
     texto = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', texto)
     return re.sub(r'[*#`_~>|]', '', texto).strip()
+
 
 def _dividir_em_frases(partes):
     buf, acc = "", ""
@@ -104,6 +104,7 @@ def _dividir_em_frases(partes):
     if resto:
         yield resto
 
+
 def _partes_groq(texto_enriquecido):
     stream = client_groq.chat.completions.create(
         model=MODELO_GROQ,
@@ -119,6 +120,7 @@ def _partes_groq(texto_enriquecido):
         if chunk.choices and chunk.choices[0].delta.content:
             yield chunk.choices[0].delta.content
 
+
 def _partes_gemini(texto_enriquecido):
     for chunk in model_gemini.generate_content(texto_enriquecido, stream=True):
         try:
@@ -126,6 +128,7 @@ def _partes_gemini(texto_enriquecido):
                 yield chunk.text
         except ValueError:
             continue
+
 
 def consultar_ia_stream(texto_enriquecido):
     """Gera a resposta frase por frase com base no prompt enriquecido com a memória."""
@@ -145,8 +148,9 @@ def consultar_ia_stream(texto_enriquecido):
         print(f"ERRO NA API ({IA_ATIVA}): {erro}")
         yield f"Falha de conexão com o meu cérebro via {IA_ATIVA}."
 
+
 def _executar_em_segundo_plano(funcao, rotulo, argumento):
-    """Roda a ação local sem atrasar a voz (o Spotify pode demorar para responder)."""
+    """Roda a ação local sem atrasar a voz."""
     def tarefa():
         print(f"C.Y.N.I.C. {rotulo}: {funcao(argumento)}")
     threading.Thread(target=tarefa, daemon=True).start()
@@ -154,16 +158,10 @@ def _executar_em_segundo_plano(funcao, rotulo, argumento):
 
 def consultar_ia(texto_usuario):
     """Orquestrador Central: busca memória, pergunta à IA, executa ações locais e salva a lembrança."""
-    # 1. Puxa lembranças relacionadas (se existirem)
     contexto = buscar_contexto(texto_usuario)
-
-    # 2. Une a lembrança com o que você acabou de falar
     prompt_enriquecido = contexto + "MENSAGEM ATUAL DO HUMANO: " + texto_usuario
-
-    # 3. Consulta a Groq/Gemini
     resposta_completa = " ".join(consultar_ia_stream(prompt_enriquecido))
 
-    # 4. AÇÕES LOCAIS: as tags são removidas para a voz não lê-las em voz alta
     m = re.search(r'\[ABRIR:(.*?)\]', resposta_completa)
     if m:
         _executar_em_segundo_plano(abrir_programa, "Sistema Local", m.group(1).strip())
@@ -174,11 +172,9 @@ def consultar_ia(texto_usuario):
         _executar_em_segundo_plano(tocar_musica, "Spotify", m.group(1).strip())
         resposta_completa = resposta_completa.replace(m.group(0), "").strip()
 
-    # 5. Salva o que aconteceu no ChromaDB para o C.Y.N.I.C. lembrar amanhã
     if resposta_completa and "Falha de conexão" not in resposta_completa:
         salvar_memoria(texto_usuario, resposta_completa)
 
-    # === INTERCEPTADOR GOOGLE WORKSPACE ===
     if "[LER_AGENDA]" in resposta_completa or "[LERAGENDA]" in resposta_completa:
         dados_agenda = ler_agenda()
         print(f"\n[C.Y.N.I.C. Workspace] {dados_agenda}\n")
@@ -189,6 +185,6 @@ def consultar_ia(texto_usuario):
         dados_emails = ler_emails()
         print(f"\n[C.Y.N.I.C. Workspace] {dados_emails}\n")
         resposta_completa = resposta_completa.replace("[LER_EMAILS]", "").replace("[LEREMAILS]", "").strip()
-        resposta_completa += f" Vasculhei sua caixa de entrada: {dados_emails}"
+        resposta_completa += f" A propósito, verifiquei os seus e-mails: {dados_emails}"
 
-    return resposta_completa
+    return resposta_completa.strip()

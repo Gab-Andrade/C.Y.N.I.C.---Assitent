@@ -3,8 +3,12 @@ __pycache__/
 memoria_cynic/
 .cache
 .env
-temp_audio.wav
+app/storage/audios/temp_audio.wav
 ztestesIA/
 zhtmlperfeito/
 credentials.json
 token.json
+app/credentials/credentials.json
+app/tokens/token.json
+app/storage/memoria_cynic/**
+!app/storage/memoria_cynic/.gitkeep

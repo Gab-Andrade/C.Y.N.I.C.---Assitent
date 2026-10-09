@@ -115,7 +115,6 @@ def tocar_musica(busca):
         if dispositivo is None:
             return "Nenhum dispositivo Spotify disponível. Abra o Spotify no PC e tente de novo."
 
-        # "Acorda" o dispositivo se ele não for o ativo (resolve o app preso sem faixa carregada)
         if not dispositivo.get("is_active"):
             sp.transfer_playback(device_id=dispositivo["id"], force_play=False)
             time.sleep(1)
@@ -130,8 +129,6 @@ def tocar_musica(busca):
         return f"Não consegui tocar: {e}"
 
 
-# Rode "python sistema_local.py" UMA vez para autorizar a conta no navegador.
-# Depois disso o token fica salvo e o C.Y.N.I.C. toca sem pedir nada.
 if __name__ == "__main__":
     sp = _spotify()
     nomes = [d["name"] for d in sp.devices().get("devices", [])]
