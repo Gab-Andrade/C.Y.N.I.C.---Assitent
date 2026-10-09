@@ -1,0 +1,41 @@
+Relatório
+
+Front-end (HUD 3D)
+
+Criados index.html, style.css e script.js com cena 3D (Three.js), painéis e reação aos estados.
+Removidos a chuva de código, a varredura do radar e os dígitos do diagnóstico.
+Qualidade ajustável (Q), reduz sozinha se o FPS cai, tela cheia (F), microfone opcional (M).
+Painel “1ª resposta” mede o tempo até a primeira resposta.
+
+Back-end (main_atualizado.py)
+
+Calibração automática do limiar de volume ao iniciar.
+Pre-roll de 0,3 s para não cortar o início da fala.
+Anti-eco: ignora o microfone enquanto ele fala.
+Microfone aberto o tempo todo, sem perder áudio entre frases.
+Exige 0,3 s de voz e usa vad_filter para ignorar ruídos.
+Encerra a thread de escuta quando a conexão cai (evita duplicatas).
+Silêncio final reduzido de 0,8 s para 0,5 s.
+Whisper small aquecido na inicialização.
+Medição de tempo no terminal ([tempo]).
+
+Cérebro (cerebro.py)
+
+Groq gpt-oss-120b com reasoning_effort: low e saída limitada a 400 tokens.
+Streaming: a resposta é dividida em frases e vai para a voz assim que cada uma fecha.
+Chaves lidas de variáveis de ambiente (GROQ_API_KEY, GEMINI_API_KEY), não do código.
+Prompt pede respostas curtas, sem markdown.
+Timeout de 20 s na Groq.
+
+Pendências
+
+Revogar as chaves da Groq e do Gemini que apareceram nos códigos colados.
+Confirmar o nome do modelo Gemini (gemini-1.5-flash provavelmente está descontinuado).
+Testar com microfone e API reais: só validei sintaxe e a divisão de frases.
+Se ainda estiver lento: trocar para openai/gpt-oss-20b.
+Se o silêncio de 0,5 s cortar frases, subir para 6 ou 7.
+
+Limitações
+
+Three.js vem do CDN: sem internet, o HUD roda sem o 3D.
+Groq e Gemini não foram testados contra a API real.
