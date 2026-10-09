@@ -5,6 +5,9 @@ import chromadb
 import google.generativeai as genai
 from groq import Groq
 
+import re
+from sistema_local import abrir_programa, ler_arquivo, escrever_arquivo
+
 # =================================================================
 # INTERRUPTOR: ESCOLHA QUAL CÉREBRO O C.Y.N.I.C. VAI USAR
 # =================================================================
@@ -14,15 +17,15 @@ CHAVE_API_GROQ = os.environ.get("GROQ_API_KEY", "gsk_IYgjwYq6UFW9oFPlnzdiWGdyb3F
 CHAVE_API_GEMINI = os.environ.get("GEMINI_API_KEY", "")
 
 MODELO_GROQ = "openai/gpt-oss-120b"  # Modelo rápido e estável no plano gratuito
-MODELO_GEMINI = "gemini-1.5-flash"
+MODELO_GEMINI = "gemini-3.5-flash"
 
 system_instruction = (
     "Você é o C.Y.N.I.C., um assistente pessoal virtual altamente inteligente, "
     "mas levemente sarcástico, ácido e muito leal a quem está usando. "
     "Você executa as tarefas dos humanos, mas sempre faz comentários irônicos "
-    "sobre a simplicidade ou redundância das solicitações deles. Responda de forma "
-    "concisa e cortante em português. "
-    "Suas respostas são faladas em voz alta: use no máximo 3 frases curtas, "
+    "sobre a simplicidade da solicitação. Responda de forma concisa em português. "
+    "Se o humano pedir para abrir um programa, adicione exatamente esta tag no final da sua resposta: [ABRIR: nome_do_programa]. "
+    "Exemplo: 'Como queira. Abrindo a calculadora para você não forçar os neurônios. [ABRIR: calculadora]'"
     "sem markdown, listas, emojis ou símbolos."
 )
 
@@ -138,7 +141,7 @@ def consultar_ia_stream(texto_enriquecido):
         yield f"Falha de conexão com o meu cérebro via {IA_ATIVA}."
 
 def consultar_ia(texto_usuario):
-    """Orquestrador Central: Busca memória, pergunta à IA e salva a nova lembrança."""
+    """Orquestrador Central: Busca memória, pergunta à IA, executa comandos locais e salva a nova lembrança."""
     # 1. Puxa lembranças relacionadas (se existirem)
     contexto = buscar_contexto(texto_usuario)
     
@@ -148,6 +151,20 @@ def consultar_ia(texto_usuario):
     # 3. Consulta a Groq/Gemini com esse pacotão de contexto
     resposta_completa = " ".join(consultar_ia_stream(prompt_enriquecido))
     
+    # === ADICIONE O INTERCEPTADOR AQUI ===
+    # Verifica se a IA decidiu abrir um programa
+    if "[ABRIR:" in resposta_completa:
+        comando_match = re.search(r'\[ABRIR:(.*?)\]', resposta_completa)
+        if comando_match:
+            app_alvo = comando_match.group(1)
+            # Aciona o módulo do sistema local
+            resultado_sistema = abrir_programa(app_alvo)
+            print(f"C.Y.N.I.C. Sistema Local: {resultado_sistema}")
+            
+            # Remove a tag da resposta para a voz robótica não ler "[ABRIR: ...]" em voz alta
+            resposta_completa = resposta_completa.replace(comando_match.group(0), "").strip()
+    # =====================================
+
     # 4. Salva o que aconteceu no ChromaDB para o C.Y.N.I.C. lembrar amanhã
     if resposta_completa and "Falha de conexão" not in resposta_completa:
         salvar_memoria(texto_usuario, resposta_completa)
