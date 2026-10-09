@@ -4,6 +4,7 @@ import uuid
 import chromadb
 import google.generativeai as genai
 from groq import Groq
+from workspace_google import ler_agenda, ler_emails
 
 import threading
 from sistema_local import abrir_programa, tocar_musica
@@ -29,6 +30,8 @@ system_instruction = (
     "para abrir um programa (bloco de notas, calculadora, vscode, navegador ou spotify) use [ABRIR: nome]; "
     "para tocar uma música use [TOCAR: nome da música e artista]. "
     "Exemplo: 'Como queira. Colocando isso para você. [TOCAR: Evidências Chitãozinho e Xororó]'"
+    "Se o humano pedir para checar a agenda ou os compromissos, adicione no final da resposta a tag: [LER_AGENDA]. "
+    "Se o humano pedir para checar os e-mails, adicione no final da resposta a tag: [LER_EMAILS]. "
 )
 
 # =================================================================
@@ -174,5 +177,18 @@ def consultar_ia(texto_usuario):
     # 5. Salva o que aconteceu no ChromaDB para o C.Y.N.I.C. lembrar amanhã
     if resposta_completa and "Falha de conexão" not in resposta_completa:
         salvar_memoria(texto_usuario, resposta_completa)
+
+    # === INTERCEPTADOR GOOGLE WORKSPACE ===
+    if "[LER_AGENDA]" in resposta_completa or "[LERAGENDA]" in resposta_completa:
+        dados_agenda = ler_agenda()
+        print(f"\n[C.Y.N.I.C. Workspace] {dados_agenda}\n")
+        resposta_completa = resposta_completa.replace("[LER_AGENDA]", "").replace("[LERAGENDA]", "").strip()
+        resposta_completa += f" A propósito, verifiquei a sua agenda: {dados_agenda}"
+
+    if "[LER_EMAILS]" in resposta_completa or "[LEREMAILS]" in resposta_completa:
+        dados_emails = ler_emails()
+        print(f"\n[C.Y.N.I.C. Workspace] {dados_emails}\n")
+        resposta_completa = resposta_completa.replace("[LER_EMAILS]", "").replace("[LEREMAILS]", "").strip()
+        resposta_completa += f" Vasculhei sua caixa de entrada: {dados_emails}"
 
     return resposta_completa

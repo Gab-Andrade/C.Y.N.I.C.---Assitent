@@ -47,7 +47,7 @@ def _aplicar_efeito(mp3_bytes):
     sound = AudioSegment.from_file(io.BytesIO(mp3_bytes), format="mp3")
     shifted = sound._spawn(sound.raw_data, overrides={'frame_rate': int(sound.frame_rate * 0.85)})
     shifted = shifted.set_frame_rate(44100)
-    atraso = (AudioSegment.silent(duration=20) + shifted).apply_gain(-2)  # -2 dB para não saturar
+    atraso = (AudioSegment.silent(duration=20) + shifted).apply_gain(+2)  # -2 dB para não saturar
     robot = shifted.overlay(atraso)
     out = io.BytesIO()
     robot.export(out, format="wav")

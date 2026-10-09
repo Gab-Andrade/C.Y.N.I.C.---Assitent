@@ -74,7 +74,7 @@ def _spotify():
 
 
 def _dispositivo(sp):
-    """Devolve o id de um dispositivo Spotify; se não houver, tenta abrir o app e esperar."""
+    """Devolve um dispositivo Spotify (prefere o computador); se não houver, tenta abrir o app e esperar."""
     def listar():
         return sp.devices().get("devices", [])
 
@@ -88,8 +88,12 @@ def _dispositivo(sp):
                 break
     if not devs:
         return None
+    computadores = [d for d in devs if d.get("type") == "Computer"]
     ativos = [d for d in devs if d.get("is_active")]
-    return (ativos or devs)[0]["id"]
+    escolhido = (computadores or ativos or devs)[0]
+    nomes = [f"{d['name']} ({d.get('type')})" for d in devs]
+    print(f"[Spotify] dispositivos: {nomes} | usando: {escolhido['name']}")
+    return escolhido
 
 
 def tocar_musica(busca):
@@ -107,11 +111,16 @@ def tocar_musica(busca):
             return f"Não encontrei '{busca}' no Spotify."
         faixa = itens[0]
 
-        device_id = _dispositivo(sp)
-        if device_id is None:
+        dispositivo = _dispositivo(sp)
+        if dispositivo is None:
             return "Nenhum dispositivo Spotify disponível. Abra o Spotify no PC e tente de novo."
 
-        sp.start_playback(device_id=device_id, uris=[faixa["uri"]])
+        # "Acorda" o dispositivo se ele não for o ativo (resolve o app preso sem faixa carregada)
+        if not dispositivo.get("is_active"):
+            sp.transfer_playback(device_id=dispositivo["id"], force_play=False)
+            time.sleep(1)
+
+        sp.start_playback(device_id=dispositivo["id"], uris=[faixa["uri"]])
         return f"Tocando {faixa['name']} de {faixa['artists'][0]['name']}."
     except spotipy.SpotifyException as e:
         if e.http_status == 403:
